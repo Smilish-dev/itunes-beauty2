@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { sb } from '../../lib/supabase'
-import { DEFAULTS } from '../../lib/defaults'
+import { DEFAULTS, SEED_PHOTOS, SEED_SERVICES, SEED_PRODUCTS } from '../../lib/defaults'
 const up = async file => { const path = `${Date.now()}-${file.name.replace(/[^\w.]/g, '_')}`; const { error } = await sb.storage.from('ib-photos').upload(path, file); if (error) throw error; return sb.storage.from('ib-photos').getPublicUrl(path).data.publicUrl }
 const chk = r => { if (r.error) throw r.error }
 function Manager({ table, title }) {
@@ -17,7 +17,7 @@ function Manager({ table, title }) {
 }
 export default function Admin() {
   const [ok, setOk] = useState(null), [em, setEm] = useState(''), [pw, setPw] = useState(''), [msg, setMsg] = useState('')
-  const [cfg, setCfg] = useState(DEFAULTS), [svc, setSvc] = useState([]), [gal, setGal] = useState([]), [n, setN] = useState({ name: '', description: '', price: '', file: null })
+  const [cfg, setCfg] = useState(DEFAULTS), [svc, setSvc] = useState([]), [ver, setVer] = useState(0), [gal, setGal] = useState([]), [n, setN] = useState({ name: '', description: '', price: '', file: null })
   const load = async () => { const [a, b, c] = await Promise.all([sb.from('ib_settings').select('*'), sb.from('ib_services').select('*').order('created_at'), sb.from('ib_gallery').select('*').order('created_at', { ascending: false })])
     setCfg({ ...DEFAULTS, ...Object.fromEntries((a.data || []).map(r => [r.key, r.value])) }); setSvc(b.data || []); setGal(c.data || []) }
   useEffect(() => { sb.auth.getSession().then(({ data }) => { setOk(!!data.session); data.session && load() }) }, [])
@@ -31,8 +31,9 @@ export default function Admin() {
     <section><h3>Owner photo</h3><div className="row me">{cfg.owner_photo && <img className="avatar" src={cfg.owner_photo} alt="" />}<span>Profile picture shown in the top section and About</span></div><input type="file" accept="image/*" onChange={e => e.target.files[0] && run(async () => { const url = await up(e.target.files[0]); chk(await sb.from('ib_settings').upsert({ key: 'owner_photo', value: url })) }, 'Photo updated')} /></section>
     <section><h3>Site details</h3>{[['hero_title', 'Headline'], ['hero_lead', 'Intro text'], ['owner_name', 'Owner name'], ['about', 'About text (a short story about you and your work)'], ['hours', 'Opening hours (one line per day)'], ['tiktok', 'TikTok link'], ['whatsapp', 'WhatsApp number (e.g. 2348012345678)'], ['instagram', 'Instagram link (optional)'], ['location', 'Location']].map(F)}
       <button className="btn" onClick={() => run(async () => chk(await sb.from('ib_settings').upsert(Object.entries(cfg).map(([key, value]) => ({ key, value })))))}>Save details</button></section>
-    <Manager table="ib_services" title="Services" />
-    <Manager table="ib_products" title="Products (oil, cream)" />
+    <section><h3>Starter content</h3><p className="sub">Adds the sample services, products and photos so you can edit or delete them. Tap only once, on a new site.</p><button className="btn alt" onClick={() => confirm('Add starter content?') && run(async () => { chk(await sb.from('ib_services').insert(SEED_SERVICES)); chk(await sb.from('ib_products').insert(SEED_PRODUCTS)); chk(await sb.from('ib_gallery').insert(SEED_PHOTOS)); setVer(v => v + 1) }, 'Starter content added')}>Add starter content</button></section>
+    <Manager key={'s' + ver} table="ib_services" title="Services" />
+    <Manager key={'p' + ver} table="ib_products" title="Products (delete when sold out)" />
     <section><h3>Gallery photos</h3><input type="file" accept="image/*" multiple onChange={e => run(async () => { for (const f of e.target.files) chk(await sb.from('ib_gallery').insert({ image_url: await up(f) })) }, 'Photos added')} />
       <div className="agal">{gal.map(p => <div key={p.id}><img src={p.image_url} alt="" /><button className="btn alt" onClick={() => confirm('Delete?') && run(async () => chk(await sb.from('ib_gallery').delete().eq('id', p.id)), 'Deleted')}>Delete</button></div>)}</div></section>
   </main>)
